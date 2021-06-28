@@ -1,0 +1,13 @@
+[package]
+name = "AccountManagerWithActix"
+version = "5.0.0"
+authors = ["Anest"]
+edition = "2018"
+
+[dependencies]
+rand = "0.8.3"
+rusqlite = "0.24.2"
+base64 = "0.13.0"
+chrono = "0.4.19"
+actix-web = "3.3.2"
+serde = "1.0.120"
