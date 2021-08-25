@@ -11,7 +11,9 @@ mod sql_operator;
 struct MessageResponse<'a> {
     message: &'a str,
 }
-static VERSION:&'static str = "5.0.0/20210628";
+
+static VERSION: &'static str = "5.0.1/20210825";
+
 mod all_methods_v1 {
     pub mod gets_v1 {
         use actix_web::{HttpResponse, Responder, web};
@@ -103,6 +105,7 @@ mod all_methods_v1 {
 
         pub mod base_info_v1 {
             use actix_web::{guard, HttpResponse, Responder, web};
+
             use crate::{MessageResponse, VERSION};
 
             pub async fn get_version() -> impl Responder {
@@ -163,6 +166,7 @@ mod all_methods_v1 {
                         base64::encode(paras.address.clone().as_bytes()),
                         base64::encode(paras.account.clone().as_bytes()),
                         base64::encode(paras.password.clone().as_bytes()),
+                        paras.email.clone(),
                         String::from(""),
                         paras.text.clone())
                 ) {
@@ -193,6 +197,10 @@ mod all_methods_v1 {
                     keyword = base64::encode(&paras.password);
                     key = String::from("Password");
                     status = true;
+                } else if "".to_string() != paras.email {
+                    keyword = paras.email.clone();
+                    key = "Email".into();
+                    status = true;
                 } else if paras.text != String::from("") {
                     keyword = paras.text.clone().replace("%", "");
                     key = String::from("Text");
@@ -209,6 +217,7 @@ mod all_methods_v1 {
                                     address: String::from_utf8(base64::decode(&x.address).unwrap()).unwrap(),
                                     account: String::from_utf8(base64::decode(&x.account).unwrap()).unwrap(),
                                     password: String::from_utf8(base64::decode(&x.password).unwrap()).unwrap(),
+                                    email: x.email.clone(),
                                     date: x.date.clone(),
                                     text: x.text.clone(),
                                 };

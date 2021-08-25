@@ -1,15 +1,16 @@
-extern crate rusqlite;
 extern crate chrono;
+extern crate rusqlite;
 
-use rusqlite::{params, Connection, Statement, Error};
 use chrono::Utc;
-use serde::{Serialize, Deserialize};
+use rusqlite::{Connection, Error, params, Statement};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Data {
     pub address: String,
     pub account: String,
     pub password: String,
+    pub email: String,
     pub date: String,
     pub text: String,
 }
@@ -33,16 +34,16 @@ impl SQLOperator {
             conn,
         };
     }
-    pub fn add_item(&self, d: &Data) -> Result<usize, (Error, [String; 4])> {
+    pub fn add_item(&self, d: &Data) -> Result<usize, (Error, [String; 5])> {
         let r = self.conn.execute(
-            "insert into Data(Address, Account, Password, Date, Text) \
-                values(?1,?2,?3,?4,?5);",
-            params![d.address, d.account, d.password,
+            "insert into Data(Address, Account, Password, Email, Date, Text) \
+                values(?1,?2,?3,?4,?5,?6);",
+            params![d.address, d.account, d.password,d.email,
                 Utc::now().format("%Y-%m-%d--%H-%M-%S--%A").to_string(), d.text],
         );
         match r {
             Ok(i) => Result::Ok(i),
-            Err(e) => Result::Err((e, [d.address.clone(), d.account.clone(), d.password.clone(), d.text.clone()]))
+            Err(e) => Result::Err((e, [d.address.clone(), d.account.clone(), d.password.clone(), d.email.clone(), d.text.clone()]))
         }
     }
     pub fn search_item(&self, key: String, key_word: String) -> Result<Vec<Data>, Error> {
@@ -51,7 +52,7 @@ impl SQLOperator {
         let mut stmt: Statement;
         if key == "Text" {
             stmt = self.conn.prepare(
-                "select Address,Account,Password,Date,Text \
+                "select Address,Account,Password,Email,Date,Text \
                 from Data \
                 where Text LIKE ?1 ORDER BY Date DESC;"
             ).unwrap();
@@ -67,8 +68,9 @@ impl SQLOperator {
                 address: row.get(0)?,
                 account: row.get(1)?,
                 password: row.get(2)?,
-                date: row.get(3)?,
-                text: row.get(4)?,
+                email: row.get(3)?,
+                date: row.get(4)?,
+                text: row.get(5)?,
             })
         }).unwrap();
         for data in data_iter {
@@ -93,11 +95,12 @@ impl SQLOperator {
         }
     }
     #[allow(non_snake_case)]
-    pub fn Data_of(ad: String, ac: String, p: String, d: String, t: String) -> Data {
+    pub fn Data_of(ad: String, ac: String, p: String, e: String, d: String, t: String) -> Data {
         Data {
             address: ad,
             account: ac,
             password: p,
+            email: e,
             date: d,
             text: t,
         }
@@ -122,6 +125,7 @@ mod tests {
             address: String::from("test.com"),
             account: String::from("test"),
             password: String::from("pd"),
+            email: "".into(),
             date: "".to_string(),
             text: String::from("forTest"),
         };
