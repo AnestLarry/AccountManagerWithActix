@@ -25,23 +25,23 @@ impl RandomGenerator {
     }
     fn get_lowercase(&mut self) -> String {
         let temp = self.generator.gen_range(0..string_letter::ASCII_LOWERCASE.len());
-        string_letter::ASCII_LOWERCASE.chars().nth(temp).unwrap().to_string()
+        string_letter::ASCII_LOWERCASE.get(temp..temp + 1).unwrap().into()
     }
     fn get_uppercase(&mut self) -> String {
         let temp = self.generator.gen_range(0..string_letter::ASCII_UPPERCASE.len());
-        string_letter::ASCII_UPPERCASE.chars().nth(temp).unwrap().to_string()
+        string_letter::ASCII_UPPERCASE.get(temp..temp + 1).unwrap().into()
     }
     fn get_letters(&mut self) -> String {
         let temp = self.generator.gen_range(0..string_letter::ASCII_LETTERS.len());
-        string_letter::ASCII_LETTERS.chars().nth(temp).unwrap().to_string()
+        string_letter::ASCII_LETTERS.get(temp..temp + 1).unwrap().into()
     }
     fn get_punctuation(&mut self) -> String {
         let temp = self.generator.gen_range(0..string_letter::PUNCTUATION_MARKS.len());
-        string_letter::PUNCTUATION_MARKS.chars().nth(temp).unwrap().to_string()
+        string_letter::PUNCTUATION_MARKS.get(temp..temp + 1).unwrap().into()
     }
     fn get_all(&mut self) -> String {
         let temp = self.generator.gen_range(0..string_letter::PRINTABLE.len());
-        string_letter::PRINTABLE.chars().nth(temp).unwrap().to_string()
+        string_letter::PRINTABLE.get(temp..temp + 1).unwrap().into()
     }
 }
 
@@ -66,7 +66,7 @@ impl RandomGenerator {
         result.join("")
     }
     pub fn get_password_1(&mut self) -> String {
-        let mut result = String::new();
+        let mut result: String = "".into();
         for _ in 0..6 {
             result.push_str(&self.get_num())
         }
@@ -74,10 +74,9 @@ impl RandomGenerator {
     }
     pub fn get_password_2(&mut self) -> String {
         let length: usize = self.generator.gen_range(8..14);
-        let mut result = String::new();
+        let mut result: String = "".into();
         for _ in 0..length {
-            let temp = self.generator.gen_range(0..3);
-            match temp {
+            match self.generator.gen_range(0..3) {
                 0 => result.push_str(&self.get_num()),
                 1 => result.push_str(&self.get_lowercase()),
                 2 => result.push_str(&self.get_uppercase()),
@@ -88,10 +87,10 @@ impl RandomGenerator {
     }
     pub fn get_password_3(&mut self) -> String {
         let length: usize = self.generator.gen_range(8..14);
-        let mut result = String::new();
+        let mut result: String = "".into();
         for _ in 0..length {
-            let temp = self.generator.gen_range(0..30);
-            match temp {
+            // let temp = ;
+            match self.generator.gen_range(0..30) {
                 0..=7 => result.push_str(&self.get_num()),
                 8..=15 => result.push_str(&self.get_lowercase()),
                 16..=23 => result.push_str(&self.get_uppercase()),
@@ -105,25 +104,23 @@ impl RandomGenerator {
         let funcs = [RandomGenerator::get_num, RandomGenerator::get_lowercase,
             RandomGenerator::get_uppercase, RandomGenerator::get_letters, RandomGenerator::get_punctuation,
             RandomGenerator::get_all];
-        let mut result = String::new();
+        let mut result: String = "".into();
         for f in funcs.iter()
         {
             for _ in 0..2 {
                 result.push_str(&f(self));
             }
         }
-        for _ in 0..6 {
+        for _ in 0..9 {
             if self.generator.gen_range(0..2) == 1 {
                 result.push_str(&self.get_all());
             }
         }
-        {
-            result.push_str(&*self.get_punctuation());
-            result.push_str(&*self.get_punctuation());
-            let mut t = result.as_bytes().to_owned();
-            t.shuffle(&mut self.generator);
-            result = String::from_utf8(t.to_vec()).unwrap();
-        }
+        result.push_str(&*self.get_punctuation());
+        result.push_str(&*self.get_punctuation());
+        let mut t = result.as_bytes().to_owned();
+        t.shuffle(&mut self.generator);
+        result = String::from_utf8(t.to_vec()).unwrap();
         result
     }
 }

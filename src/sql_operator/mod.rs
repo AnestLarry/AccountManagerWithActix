@@ -48,29 +48,24 @@ impl SQLOperator {
     }
     pub fn search_item(&self, key: String, key_word: String) -> Result<Vec<Data>, Error> {
         let mut res: Vec<Data> = Vec::new();
-        //let mut res: LinkedList<Data> = LinkedList::new();
         let mut stmt: Statement;
         if key == "Text" {
-            stmt = self.conn.prepare(
-                "select Address,Account,Password,Email,Date,Text \
+            stmt = self.conn.prepare("select Address,Account,Password,Email,Date,Text \
                 from Data \
-                where Text LIKE ?1 ORDER BY Date DESC;"
-            ).unwrap();
+                where Text LIKE ?1 ORDER BY Date DESC;")?;
         } else {
-            stmt = self.conn.prepare(
-                format!("select Address,Account,Password,Date,Text \
+            stmt = self.conn.prepare(&format!("select Address,Account,Password,Email,Date,Text \
                 from Data \
-                where {0} = ?1 ORDER BY Date DESC;", key).as_ref()
-            ).unwrap();
+                where {0} = ?1 ORDER BY Date DESC;", key))?;
         }
         let data_iter = stmt.query_map(params![key_word], |row| {
             Ok(Data {
                 address: row.get(0)?,
                 account: row.get(1)?,
                 password: row.get(2)?,
-                email: row.get(3)?,
+                email: row.get(3).unwrap_or("".into()),
                 date: row.get(4)?,
-                text: row.get(5)?,
+                text: row.get(5).unwrap_or("".into()),
             })
         }).unwrap();
         for data in data_iter {
@@ -79,7 +74,7 @@ impl SQLOperator {
         Result::Ok(res)
     }
     pub fn remove_item(&self, date: String) -> Result<(usize, Vec<Data>), Error> {
-        let datas = self.search_item(String::from("Date"), date.clone()).unwrap();
+        let datas = self.search_item("Date".into(), date.to_string()).unwrap();
         let r = self.conn.execute("delete from Data where Date = ?1;", params![date]);
         match r {
             Ok(i) => Result::Ok((i, datas)),
@@ -122,48 +117,26 @@ mod tests {
     fn SQLOperator__add_item() {
         let sql: SQLOperator = SQLOperator::new();
         let d = Data {
-            address: String::from("test.com"),
-            account: String::from("test"),
-            password: String::from("pd"),
+            address: "test.com".into(),
+            account: "test".into(),
+            password: "pd".into(),
             email: "".into(),
-            date: "".to_string(),
-            text: String::from("forTest"),
+            date: "".into(),
+            text: "forTest".into(),
         };
-        assert_eq!(sql.add_item(&d)
-                       .unwrap(),
-                   1);
+        assert_eq!(sql.add_item(&d)?, 1);
     }
 
     fn SQLOperator__search_item() {
         let sql: SQLOperator = SQLOperator::new();
-        let address = sql.search_item(
-            String::from("Address"), String::from("test.com"),
-        )
-            .unwrap()
-            .pop()
-            .unwrap()
-            .address;
-        let account = sql.search_item(
-            String::from("Account"), String::from("test"),
-        )
-            .unwrap()
-            .pop()
-            .unwrap()
-            .account;
-        let password = sql.search_item(
-            String::from("Password"), String::from("pd"),
-        )
-            .unwrap()
-            .pop()
-            .unwrap()
-            .password;
-        let text = sql.search_item(
-            String::from("Text"), String::from("forTest"),
-        )
-            .unwrap()
-            .pop()
-            .unwrap()
-            .text;
+        let address = sql.search_item("Address".into(), "test.com".into())?
+            .pop()?.address;
+        let account = sql.search_item("Account".into(), "test".into())?
+            .pop()?.account;
+        let password = sql.search_item("Password".into(), "pd".into())?
+            .pop()?.password;
+        let text = sql.search_item("Text".into(), "forTest".into())?
+            .pop()?.text;
         assert_eq!(address, "test.com");
         assert_eq!(account, "test");
         assert_eq!(password, "pd");
@@ -172,25 +145,17 @@ mod tests {
 
     fn SQLOperator__update_item() {
         let sql: SQLOperator = SQLOperator::new();
-        let data = sql.search_item(
-            String::from("Address"), String::from("test.com"),
-        )
-            .unwrap()
-            .pop()
-            .unwrap();
-        let r = sql.update_item(data.text, data.date).unwrap();
+        let data = sql.search_item("Address".into(), "test.com".into())?
+            .pop()?;
+        let r = sql.update_item(data.text, data.date)?;
         assert_eq!(r, (true, 1));
     }
 
     fn SQLOperator__remove_item() {
         let sql: SQLOperator = SQLOperator::new();
-        let data = sql.search_item(
-            String::from("Address"), String::from("test.com"),
-        )
-            .unwrap()
-            .pop()
-            .unwrap();
-        let r = sql.remove_item(data.date).unwrap();
+        let data = sql.search_item("Address".into(), "test.com".into())?
+            .pop()?;
+        let r = sql.remove_item(data.date)?;
         assert_eq!(r.0, 1);
     }
 }

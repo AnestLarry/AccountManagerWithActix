@@ -34,11 +34,11 @@ mod all_methods_v1 {
                     message: &'a str,
                     value: String,
                 }
-                let hm = [String::from("account"), String::from("passwordLv1"),
-                    String::from("passwordLv2"), String::from("passwordLv3"), String::from("passwordLvMax")];
+                let hm: [String; 5] = ["account".into(), "passwordLv1".into(), "passwordLv2".into(),
+                    "passwordLv3".into(), "passwordLvMax".into()];
 
                 if !hm.contains(&item_name) {
-                    HttpResponse::Ok().json(Response { message: "Mismatch your item name.", value: String::from("") })
+                    HttpResponse::Ok().json(Response { message: "Mismatch your item name.", value: "".into() })
                 } else {
                     let res = match item_name.as_str() {
                         "account" => random_generator.get_account(),
@@ -46,7 +46,7 @@ mod all_methods_v1 {
                         "passwordLv2" => random_generator.get_password_2(),
                         "passwordLv3" => random_generator.get_password_3(),
                         "passwordLvMax" => random_generator.get_password_max(),
-                        _ => String::from("")
+                        _ => "".into()
                     };
                     HttpResponse::Ok().json(Response { message: "succ", value: res })
                 }
@@ -163,11 +163,11 @@ mod all_methods_v1 {
 
                 match sql_oper.add_item(
                     &SQLOperator::Data_of(
-                        base64::encode(paras.address.clone().as_bytes()),
-                        base64::encode(paras.account.clone().as_bytes()),
-                        base64::encode(paras.password.clone().as_bytes()),
+                        base64::encode(paras.address.as_bytes()),
+                        base64::encode(paras.account.as_bytes()),
+                        base64::encode(paras.password.as_bytes()),
                         paras.email.clone(),
-                        String::from(""),
+                        "".into(),
                         paras.text.clone())
                 ) {
                     Ok(d) => { HttpResponse::Ok().json(Response { message: "succ", changed: d }) }
@@ -182,28 +182,28 @@ mod all_methods_v1 {
                     message: &'a str,
                     result: Vec<SQLOperatorData>,
                 }
-                let mut key = "".to_string();
-                let mut keyword = "".to_string();
+                let mut key: String = "".into();
+                let mut keyword: String = "".into();
                 let mut status = false;
-                if paras.address != String::from("") {
+                if paras.address != "" {
                     keyword = base64::encode(&paras.address);
-                    key = String::from("Address");
+                    key = "Address".into();
                     status = true;
-                } else if paras.account != String::from("") {
+                } else if paras.account != "" {
                     keyword = base64::encode(&paras.account);
-                    key = String::from("Account");
+                    key = "Account".into();
                     status = true;
-                } else if paras.password != String::from("") {
+                } else if paras.password != "" {
                     keyword = base64::encode(&paras.password);
-                    key = String::from("Password");
+                    key = "Password".into();
                     status = true;
-                } else if "".to_string() != paras.email {
+                } else if paras.email != "" {
                     keyword = paras.email.clone();
                     key = "Email".into();
                     status = true;
                 } else if paras.text != String::from("") {
-                    keyword = paras.text.clone().replace("%", "");
-                    key = String::from("Text");
+                    keyword = paras.text.replace("%", "");
+                    key = "Text".into();
                     if keyword.len() != 0 {
                         status = true;
                     }
@@ -233,8 +233,8 @@ mod all_methods_v1 {
 
             pub async fn delete_item(paras: web::Form<SQLOperatorData>) -> impl Responder {
                 let sql_oper = SQLOperator::new();
-                let date = paras.date.clone();
-                if date == String::from("") {
+                let date: String = paras.date.to_string();
+                if date == "" {
                     HttpResponse::BadRequest().json(Response { message: "miss date.", changed: 0 })
                 } else {
                     match sql_oper.remove_item(date) {
@@ -246,10 +246,10 @@ mod all_methods_v1 {
 
             pub async fn update_item(paras: web::Form<SQLOperatorData>) -> impl Responder {
                 let sql_oper = SQLOperator::new();
-                if paras.date == String::from("") {
+                if paras.date == "" {
                     HttpResponse::BadRequest().json(MessageResponse { message: "miss date." })
                 } else {
-                    match sql_oper.update_item(paras.text.clone(), paras.date.clone()) {
+                    match sql_oper.update_item(paras.text.to_string(), paras.date.to_string()) {
                         Ok(_) => { HttpResponse::Ok().json(MessageResponse { message: "succ" }) }
                         Err(_) => { HttpResponse::Ok().json(MessageResponse { message: "err" }) }
                     }
@@ -307,7 +307,7 @@ async fn method_not_found() -> impl Responder {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args: Vec<String> = std_args().collect();
-    let mut ip = String::from("127.0.0.1");
+    let mut ip: String = "127.0.0.1".into();
     let mut port = 8000u16;
     let mut i = 1;
     // argv parse
