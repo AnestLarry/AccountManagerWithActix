@@ -5,7 +5,7 @@ use std::io::BufReader;
 
 use actix_web::{App, HttpResponse, HttpServer, Responder, web};
 use rustls::internal::pemfile::{certs, pkcs8_private_keys};
-use rustls::{NoClientAuth,ServerConfig};
+use rustls::{NoClientAuth, ServerConfig};
 use serde::Serialize;
 
 mod data_generator;
@@ -149,6 +149,8 @@ mod all_methods_v1 {
 
         pub mod item_methods_v1 {
             use std::borrow::Borrow;
+            use std::collections::BTreeMap;
+            use std::ops::Index;
 
             use actix_web::{guard, HttpResponse, Responder, web};
             use serde::Serialize;
@@ -159,8 +161,18 @@ mod all_methods_v1 {
             #[derive(Debug, Serialize)]
             struct Response<'a> {
                 message: &'a str,
-                changed: usize,
+                response: ResType,
             }
+
+            #[derive(Debug, Serialize, Clone)]
+            enum ResType {
+                Changed(usize),
+                SearchResult(Vec<SQLOperatorData>),
+                None(bool),
+            }
+
+            static mut CACHED: Vec<(String, usize, ResType)> = Vec::new();
+            static CACHED_SIZE: usize = 15;
 
             pub async fn save_item(paras: web::Form<SQLOperatorData>) -> impl Responder {
                 let sql_oper = SQLOperator::new();
@@ -174,18 +186,16 @@ mod all_methods_v1 {
                         "".into(),
                         paras.text.clone())
                 ) {
-                    Ok(d) => { HttpResponse::Ok().json(Response { message: "succ", changed: d }) }
-                    Err(_) => { HttpResponse::Ok().json(Response { message: "err", changed: 0 }) }
+                    Ok(d) => unsafe {
+                        CACHED.clear();
+                        HttpResponse::Ok().json(Response { message: "succ", response: ResType::Changed { 0: d } })
+                    }
+                    Err(_) => { HttpResponse::Ok().json(Response { message: "err", response: ResType::Changed { 0: 0 } }) }
                 }
             }
 
             pub async fn search_item(paras: web::Form<SQLOperatorData>) -> impl Responder {
                 let sql_oper = SQLOperator::new();
-                #[derive(Debug, Serialize)]
-                struct Response<'a> {
-                    message: &'a str,
-                    result: Vec<SQLOperatorData>,
-                }
                 let mut key: String = "".into();
                 let mut keyword: String = "".into();
                 let mut status = false;
@@ -212,7 +222,30 @@ mod all_methods_v1 {
                         status = true;
                     }
                 }
-                if status {
+                let cache_str = format!("search_item-{}%{}", key, keyword);
+
+                let (r, s): (usize, bool) = unsafe {
+                    match CACHED.iter().position(|x| x.0 == cache_str) {
+                        None => (0, false),
+                        Some(r) => (r, true)
+                    }
+                };
+
+                if s == true {
+                    unsafe {
+                        let a: &mut (String, usize, ResType) = CACHED.get_mut(r).unwrap();
+                        a.1 += 1;
+                        if a.1 %10 == 0 {
+                            for e in CACHED.iter_mut(){
+                                (*e).1 -=2;
+                            }
+                        }
+                        HttpResponse::Ok().json(Response {
+                            message: "ok",
+                            response: (*a).2.clone(),
+                        })
+                    }
+                } else if status {
                     match sql_oper.search_item(key, keyword) {
                         Ok(mut r) => {
                             for i in 0..r.len() {
@@ -226,12 +259,30 @@ mod all_methods_v1 {
                                     text: x.text.clone(),
                                 };
                             }
-                            HttpResponse::Ok().json(Response { message: "succ", result: r })
+                            unsafe {
+                                if CACHED.len() < CACHED_SIZE {
+                                    CACHED.push((cache_str, 1, ResType::SearchResult { 0: r.to_vec() }));
+                                } else {
+                                    CACHED.sort_by(|x, y| y.1.cmp(&x.1));
+                                    CACHED.pop();
+                                    CACHED.push((cache_str, 1, ResType::SearchResult { 0: r.to_vec() }));
+                                }
+                            }
+                            HttpResponse::Ok().json(Response { message: "succ", response: ResType::SearchResult { 0: r } })
                         }
-                        Err(_) => { HttpResponse::InternalServerError().json(Response { message: "server have some problems.", result: Default::default() }) }
+                        Err(e) => {
+                            eprintln!("{}", e.to_string());
+                            HttpResponse::InternalServerError().json(Response {
+                                message: "server have some problems.",
+                                response: ResType::SearchResult { 0: Vec::with_capacity(0) },
+                            })
+                        }
                     }
                 } else {
-                    HttpResponse::Forbidden().json(Response { message: "No legal argument(address, account, password, text) in request.", result: Default::default() })
+                    HttpResponse::Forbidden().json(Response {
+                        message: "No legal argument(address, account, password, text) in request.",
+                        response: ResType::SearchResult { 0: Vec::with_capacity(0) },
+                    })
                 }
             }
 
@@ -239,11 +290,14 @@ mod all_methods_v1 {
                 let sql_oper = SQLOperator::new();
                 let date: String = paras.date.to_string();
                 if date == "" {
-                    HttpResponse::BadRequest().json(Response { message: "miss date.", changed: 0 })
+                    HttpResponse::BadRequest().json(Response { message: "miss date.", response: ResType::Changed { 0: 0 } })
                 } else {
                     match sql_oper.remove_item(date) {
-                        Ok(d) => { HttpResponse::Ok().json(Response { message: "succ", changed: d.0 }) }
-                        Err(_) => { HttpResponse::Ok().json(Response { message: "err", changed: 0 }) }
+                        Ok(d) => unsafe {
+                            CACHED.clear();
+                            HttpResponse::Ok().json(Response { message: "succ", response: ResType::Changed { 0: d.0 } })
+                        }
+                        Err(_) => { HttpResponse::Ok().json(Response { message: "err", response: ResType::Changed { 0: 0 } }) }
                     }
                 }
             }
@@ -359,18 +413,16 @@ async fn main() -> std::io::Result<()> {
         server.bind(format!("{0}:{1}", ip, port))?
             .run()
             .await
-    }
-    else {
+    } else {
         let mut config = ServerConfig::new(NoClientAuth::new());
         let cert_file = &mut BufReader::new(File::open(crt_file).unwrap());
         let key_file = &mut BufReader::new(File::open(key_file).unwrap());
         let cert_chain = certs(cert_file).unwrap();
         let mut keys = pkcs8_private_keys(key_file).unwrap();
         config.set_single_cert(cert_chain, keys.remove(0)).unwrap();
-        server.bind_rustls(format!("{0}:{1}", ip, port),config)?
+        server.bind_rustls(format!("{0}:{1}", ip, port), config)?
             .run()
             .await
-
     }
 }
 
