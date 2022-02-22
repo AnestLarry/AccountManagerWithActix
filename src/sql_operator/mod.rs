@@ -5,7 +5,7 @@ use chrono::Utc;
 use rusqlite::{Connection, Error, params, Statement};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize,Clone)]
 pub struct Data {
     pub address: String,
     pub account: String,

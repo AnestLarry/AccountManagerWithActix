@@ -54,10 +54,10 @@ impl RandomGenerator {
     }
     pub fn get_account(&mut self) -> String {
         let length: usize = self.generator.gen_range(7..11);
-        let mut result = vec![self.get_letters()];
+        let mut result = Vec::with_capacity(11);
+        result.push(self.get_letters());
         for _ in 0..length {
-            let temp = self.generator.gen_range(0..2);
-            if temp == 0 {
+            if self.generator.gen_bool(0.5) {
                 result.push(self.get_num());
             } else {
                 result.push(self.get_letters());
@@ -66,61 +66,59 @@ impl RandomGenerator {
         result.join("")
     }
     pub fn get_password_1(&mut self) -> String {
-        let mut result: String = "".into();
+        let mut result = Vec::with_capacity(6);
         for _ in 0..6 {
-            result.push_str(&self.get_num())
+            result.push(self.get_num())
         }
-        result
+        result.join("")
     }
     pub fn get_password_2(&mut self) -> String {
         let length: usize = self.generator.gen_range(8..14);
-        let mut result: String = "".into();
+        let mut result = Vec::with_capacity(14);
         for _ in 0..length {
             match self.generator.gen_range(0..3) {
-                0 => result.push_str(&self.get_num()),
-                1 => result.push_str(&self.get_lowercase()),
-                2 => result.push_str(&self.get_uppercase()),
+                0 => result.push(self.get_num()),
+                1 => result.push(self.get_lowercase()),
+                2 => result.push(self.get_uppercase()),
                 _ => {}
             }
         }
-        result
+        result.join("")
     }
     pub fn get_password_3(&mut self) -> String {
         let length: usize = self.generator.gen_range(8..14);
-        let mut result: String = "".into();
+        let mut result = Vec::with_capacity(14);
         for _ in 0..length {
             // let temp = ;
             match self.generator.gen_range(0..30) {
-                0..=7 => result.push_str(&self.get_num()),
-                8..=15 => result.push_str(&self.get_lowercase()),
-                16..=23 => result.push_str(&self.get_uppercase()),
-                24..=29 => result.push_str(&self.get_punctuation()),
+                0..=7 => result.push(self.get_num()),
+                8..=15 => result.push(self.get_lowercase()),
+                16..=23 => result.push(self.get_uppercase()),
+                24..=29 => result.push(self.get_punctuation()),
                 _ => {}
             }
         }
-        result
+        result.join("")
     }
     pub fn get_password_max(&mut self) -> String {
         let funcs = [RandomGenerator::get_num, RandomGenerator::get_lowercase,
             RandomGenerator::get_uppercase, RandomGenerator::get_letters, RandomGenerator::get_punctuation,
             RandomGenerator::get_all];
-        let mut result: String = "".into();
+        let mut result:Vec<String>=Vec::with_capacity(21);
         for f in funcs.iter()
         {
             for _ in 0..2 {
-                result.push_str(&f(self));
+                result.push(f(self));
             }
         }
         for _ in 0..9 {
-            if self.generator.gen_range(0..2) == 1 {
-                result.push_str(&self.get_all());
+            if self.generator.gen_bool(0.5) {
+                result.push(self.get_all());
             }
         }
-        result.push_str(&*self.get_punctuation());
-        result.push_str(&*self.get_punctuation());
-        let mut t = result.as_bytes().to_owned();
-        t.shuffle(&mut self.generator);
-        result = String::from_utf8(t.to_vec()).unwrap();
-        result
+        result.push(self.get_punctuation());
+        result.push(self.get_punctuation());
+        result.shuffle(&mut self.generator);
+        result.join("")
     }
 }
