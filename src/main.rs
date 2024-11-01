@@ -4,8 +4,8 @@ use std::fs::File;
 use std::io::BufReader;
 
 use actix_web::{App, HttpResponse, HttpServer, Responder, web};
-use rustls::internal::pemfile::{certs, pkcs8_private_keys};
-use rustls::{NoClientAuth, ServerConfig};
+use rustls::{pki_types::PrivateKeyDer, ServerConfig};
+use rustls_pemfile::{certs, pkcs8_private_keys};
 use serde::Serialize;
 
 mod data_generator;
@@ -16,7 +16,7 @@ struct MessageResponse<'a> {
     message: &'a str,
 }
 
-static VERSION: &'static str = "5.0.1/20210825";
+static VERSION: &'static str = "5.0.2/20241101";
 
 mod all_methods_v1 {
     pub mod gets_v1 {
@@ -149,10 +149,11 @@ mod all_methods_v1 {
 
         pub mod item_methods_v1 {
             use std::borrow::Borrow;
-            use std::collections::BTreeMap;
-            use std::ops::Index;
-
+            use std::sync::Mutex;
             use actix_web::{guard, HttpResponse, Responder, web};
+            use base64::Engine;
+            use base64::prelude::BASE64_STANDARD;
+
             use serde::Serialize;
 
             use crate::MessageResponse;
@@ -167,27 +168,25 @@ mod all_methods_v1 {
             #[derive(Debug, Serialize, Clone)]
             enum ResType {
                 Changed(usize),
-                SearchResult(Vec<SQLOperatorData>),
-                None(bool),
+                SearchResult(Vec<SQLOperatorData>)
             }
 
-            static mut CACHED: Vec<(String, usize, ResType)> = Vec::new();
+            static mut CACHED: Mutex<Vec<(String, usize, ResType)>> = Mutex::new(Vec::new());
             static CACHED_SIZE: usize = 15;
 
             pub async fn save_item(paras: web::Form<SQLOperatorData>) -> impl Responder {
                 let sql_oper = SQLOperator::new();
-
                 match sql_oper.add_item(
                     &SQLOperator::Data_of(
-                        base64::encode(paras.address.as_bytes()),
-                        base64::encode(paras.account.as_bytes()),
-                        base64::encode(paras.password.as_bytes()),
+                        BASE64_STANDARD.encode(paras.address.as_bytes()),
+                        BASE64_STANDARD.encode(paras.account.as_bytes()),
+                        BASE64_STANDARD.encode(paras.password.as_bytes()),
                         paras.email.clone(),
                         "".into(),
                         paras.text.clone())
                 ) {
                     Ok(d) => unsafe {
-                        CACHED.clear();
+                        CACHED.lock().unwrap().clear();
                         HttpResponse::Ok().json(Response { message: "succ", response: ResType::Changed { 0: d } })
                     }
                     Err(_) => { HttpResponse::Ok().json(Response { message: "err", response: ResType::Changed { 0: 0 } }) }
@@ -200,15 +199,15 @@ mod all_methods_v1 {
                 let mut keyword: String = "".into();
                 let mut status = false;
                 if paras.address != "" {
-                    keyword = base64::encode(&paras.address);
+                    keyword = BASE64_STANDARD.encode(&paras.address);
                     key = "Address".into();
                     status = true;
                 } else if paras.account != "" {
-                    keyword = base64::encode(&paras.account);
+                    keyword = BASE64_STANDARD.encode(&paras.account);
                     key = "Account".into();
                     status = true;
                 } else if paras.password != "" {
-                    keyword = base64::encode(&paras.password);
+                    keyword = BASE64_STANDARD.encode(&paras.password);
                     key = "Password".into();
                     status = true;
                 } else if paras.email != "" {
@@ -225,7 +224,7 @@ mod all_methods_v1 {
                 let cache_str = format!("search_item-{}%{}", key, keyword);
 
                 let (r, s): (usize, bool) = unsafe {
-                    match CACHED.iter().position(|x| x.0 == cache_str) {
+                    match CACHED.lock().unwrap().iter().position(|x| x.0 == cache_str) {
                         None => (0, false),
                         Some(r) => (r, true)
                     }
@@ -233,11 +232,12 @@ mod all_methods_v1 {
 
                 if s == true {
                     unsafe {
-                        let a: &mut (String, usize, ResType) = CACHED.get_mut(r).unwrap();
+                        let mut cached_unwrap = CACHED.lock().unwrap();
+                        let a: &mut (String, usize, ResType) = cached_unwrap.get_mut(r).unwrap();
                         a.1 += 1;
-                        if a.1 %10 == 0 {
-                            for e in CACHED.iter_mut(){
-                                (*e).1 -=2;
+                        if a.1 % 10 == 0 {
+                            for e in CACHED.lock().unwrap().iter_mut() {
+                                (*e).1 -= 2;
                             }
                         }
                         HttpResponse::Ok().json(Response {
@@ -251,21 +251,21 @@ mod all_methods_v1 {
                             for i in 0..r.len() {
                                 let x = r[i].borrow();
                                 r[i] = SQLOperatorData {
-                                    address: String::from_utf8(base64::decode(&x.address).unwrap()).unwrap(),
-                                    account: String::from_utf8(base64::decode(&x.account).unwrap()).unwrap(),
-                                    password: String::from_utf8(base64::decode(&x.password).unwrap()).unwrap(),
+                                    address: String::from_utf8(BASE64_STANDARD.decode(&x.address).unwrap()).unwrap(),
+                                    account: String::from_utf8(BASE64_STANDARD.decode(&x.account).unwrap()).unwrap(),
+                                    password: String::from_utf8(BASE64_STANDARD.decode(&x.password).unwrap()).unwrap(),
                                     email: x.email.clone(),
                                     date: x.date.clone(),
                                     text: x.text.clone(),
                                 };
                             }
                             unsafe {
-                                if CACHED.len() < CACHED_SIZE {
-                                    CACHED.push((cache_str, 1, ResType::SearchResult { 0: r.to_vec() }));
+                                if CACHED.lock().unwrap().len() < CACHED_SIZE {
+                                    CACHED.lock().unwrap().push((cache_str, 1, ResType::SearchResult { 0: r.to_vec() }));
                                 } else {
-                                    CACHED.sort_by(|x, y| y.1.cmp(&x.1));
-                                    CACHED.pop();
-                                    CACHED.push((cache_str, 1, ResType::SearchResult { 0: r.to_vec() }));
+                                    CACHED.lock().unwrap().sort_by(|x, y| y.1.cmp(&x.1));
+                                    CACHED.lock().unwrap().pop();
+                                    CACHED.lock().unwrap().push((cache_str, 1, ResType::SearchResult { 0: r.to_vec() }));
                                 }
                             }
                             HttpResponse::Ok().json(Response { message: "succ", response: ResType::SearchResult { 0: r } })
@@ -294,7 +294,7 @@ mod all_methods_v1 {
                 } else {
                     match sql_oper.remove_item(date) {
                         Ok(d) => unsafe {
-                            CACHED.clear();
+                            CACHED.lock().unwrap().clear();
                             HttpResponse::Ok().json(Response { message: "succ", response: ResType::Changed { 0: d.0 } })
                         }
                         Err(_) => { HttpResponse::Ok().json(Response { message: "err", response: ResType::Changed { 0: 0 } }) }
@@ -362,6 +362,7 @@ async fn method_not_found() -> impl Responder {
     HttpResponse::NotFound().json(MessageResponse { message: "No request method found." })
 }
 
+// #[actix_web::main]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args: Vec<String> = std_args().collect();
@@ -396,7 +397,7 @@ async fn main() -> std::io::Result<()> {
         }
     }
     println!("listen on:{0}:{1}", ip, port);
-    drop(i);
+    let _ = i;
     let server = HttpServer::new(
         || App::new()
             .service(
@@ -414,13 +415,16 @@ async fn main() -> std::io::Result<()> {
             .run()
             .await
     } else {
-        let mut config = ServerConfig::new(NoClientAuth::new());
-        let cert_file = &mut BufReader::new(File::open(crt_file).unwrap());
-        let key_file = &mut BufReader::new(File::open(key_file).unwrap());
-        let cert_chain = certs(cert_file).unwrap();
-        let mut keys = pkcs8_private_keys(key_file).unwrap();
-        config.set_single_cert(cert_chain, keys.remove(0)).unwrap();
-        server.bind_rustls(format!("{0}:{1}", ip, port), config)?
+        let config_builder = ServerConfig::builder().with_no_client_auth();
+        let cert_file = &mut BufReader::new(File::open(crt_file)?);
+        let key_file = &mut BufReader::new(File::open(key_file)?);
+        let cert_chain = certs(cert_file).collect::<Result<Vec<_>, _>>()?;
+        let mut keys = pkcs8_private_keys(key_file)
+            .map(|key| key.map(PrivateKeyDer::Pkcs8))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let config = config_builder.with_single_cert(cert_chain, keys.remove(0)).unwrap();
+        server.bind_rustls_0_23(format!("{0}:{1}", ip, port), config)?
             .run()
             .await
     }
